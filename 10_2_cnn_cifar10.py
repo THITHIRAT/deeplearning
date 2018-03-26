@@ -27,7 +27,7 @@ sess = tf.Session()
 batch_size = 128
 data_dir = 'temp'
 output_every = 50 #2 # change this to 50 for a complete run
-generations = 20000 #100 # change this to 20000 for a complete run
+generations = 10000 #100 # change this to 20000 for a complete run
 eval_every = 500 #2 # change this to 500 for a complete run
 image_height = 32
 image_width = 32
@@ -38,9 +38,9 @@ num_targets = 10
 extract_folder = 'cifar-10-batches-bin'
 
 # Exponential Learning Rate Decay Params
-learning_rate = 0.25 #0.1
+learning_rate = 0.75 #0.1
 lr_decay = 0.1
-num_gens_to_wait = 250.
+num_gens_to_wait = 250
 
 # Extract model parameters
 image_vec_length = image_height * image_width * num_channels
@@ -130,7 +130,7 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
     # First Convolutional Layer
     with tf.variable_scope('conv1') as scope:
         # Conv_kernel is 5x5 for all 3 colors and we will create 64 features
-        conv1_kernel = truncated_normal_var(name='conv_kernel1', shape=[5, 5, 3, 64], dtype=tf.float32)
+        conv1_kernel = variable_with_weight_decay(name='conv_kernel1', shape=[5, 5, 3, 64], stddev=5e-2, wd=0.0)
         # We convolve across the image with a stride size of 1
         conv1 = tf.nn.conv2d(input_images, conv1_kernel, [1, 1, 1, 1], padding='SAME')
         # Initialize and add the bias term
@@ -149,7 +149,7 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
     # Second Convolutional Layer
     with tf.variable_scope('conv2') as scope:
         # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
-        conv2_kernel = truncated_normal_var(name='conv_kernel2', shape=[5, 5, 64, 64], dtype=tf.float32)
+        conv2_kernel = variable_with_weight_decay(name='conv_kernel2', shape=[5, 5, 64, 64], stddev=5e-2, wd=0.0)
         # Convolve filter across prior output with stride size of 1
         conv2 = tf.nn.conv2d(norm1, conv2_kernel, [1, 1, 1, 1], padding='SAME')
         # Initialize and add the bias
