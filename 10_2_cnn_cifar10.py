@@ -186,7 +186,7 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
         # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
         conv3_kernel = variable_with_weight_decay(name='conv_kernel3', shape=[3, 3, 64, 128], stddev=5e-2, wd=0.0)
         # Convolve filter across prior output with stride size of 1
-        conv3 = tf.nn.conv2d(norm2, conv3_kernel, [1, 1, 1, 1], padding='SAME')
+        conv3 = tf.nn.conv2d(pool2, conv3_kernel, [1, 1, 1, 1], padding='SAME')
         # Initialize and add the bias
         conv3_bias = zero_var(name='conv_bias3', shape=[128], dtype=tf.float32)
         conv3_add_bias = tf.nn.bias_add(conv3, conv3_bias)
