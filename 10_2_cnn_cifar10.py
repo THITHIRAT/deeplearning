@@ -181,56 +181,9 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
     # Max Pooling
     pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool_layer2') 
     
-    # Third Convolutional Layer
-    with tf.variable_scope('conv3') as scope:
-        # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
-        conv3_kernel = variable_with_weight_decay(name='conv_kernel3', shape=[3, 3, 64, 128], stddev=5e-2, wd=0.0)
-        # Convolve filter across prior output with stride size of 1
-        conv3 = tf.nn.conv2d(norm2, conv3_kernel, [1, 1, 1, 1], padding='SAME')
-        # Initialize and add the bias
-        conv3_bias = zero_var(name='conv_bias3', shape=[128], dtype=tf.float32)
-        conv3_add_bias = tf.nn.bias_add(conv3, conv3_bias)
-        # ReLU element wise
-        relu_conv3 = tf.nn.relu(conv3_add_bias)
-
-    # Local Response Normalization (parameters from paper)
-    #norm2 = tf.nn.lrn(relu_conv2, depth_radius=5, bias=2.0, alpha=0.001 / 9.0, beta=0.75, name='norm2')
     
-    # Max Pooling
-    #pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool_layer2')   
-    
-    # Fourth Convolutional Layer
-    with tf.variable_scope('conv4') as scope:
-        # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
-        conv4_kernel = variable_with_weight_decay(name='conv_kernel4', shape=[3, 3, 128, 128], stddev=5e-2, wd=0.0)
-        # Convolve filter across prior output with stride size of 1
-        conv4 = tf.nn.conv2d(relu_conv3, conv4_kernel, [1, 1, 1, 1], padding='SAME')
-        # Initialize and add the bias
-        conv4_bias = zero_var(name='conv_bias4', shape=[128], dtype=tf.float32)
-        conv4_add_bias = tf.nn.bias_add(conv4, conv4_bias)
-        # ReLU element wise
-        relu_conv4 = tf.nn.relu(conv4_add_bias)
-        
-    # Fifth Convolutional Layer
-    with tf.variable_scope('conv5') as scope:
-        # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
-        conv5_kernel = variable_with_weight_decay(name='conv_kernel5', shape=[3, 3, 128, 128], stddev=5e-2, wd=0.0)
-        # Convolve filter across prior output with stride size of 1
-        conv5 = tf.nn.conv2d(relu_conv4, conv5_kernel, [1, 1, 1, 1], padding='SAME')
-        # Initialize and add the bias
-        conv5_bias = zero_var(name='conv_bias5', shape=[128], dtype=tf.float32)
-        conv5_add_bias = tf.nn.bias_add(conv5, conv5_bias)
-        # ReLU element wise
-        relu_conv5 = tf.nn.relu(conv5_add_bias)
-
-    # Local Response Normalization (parameters from paper)
-    norm5 = tf.nn.lrn(relu_conv5, depth_radius=5, bias=2.0, alpha=0.001 / 9.0, beta=0.75, name='norm5')
-    
-    # Max Pooling
-    pool5 = tf.nn.max_pool(norm5, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool_layer5')
-
     # Reshape output into a single matrix for multiplication for the fully connected layers
-    reshaped_output = tf.reshape(relu_conv5, [batch_size, -1])
+    reshaped_output = tf.reshape(pool2, [batch_size, -1])
     reshaped_dim = reshaped_output.get_shape()[1].value
     
     # First Fully Connected Layer
@@ -259,6 +212,7 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
         full_weight3 = truncated_normal_var(name='full_mult3', shape=[192, num_targets], dtype=tf.float32)
         full_bias3 =  zero_var(name='full_bias3', shape=[num_targets], dtype=tf.float32)
         final_output = tf.add(tf.matmul(full_layer2, full_weight3), full_bias3)
+        final_output_argmax = tf.argmax(final_output, axis=1)
         
     return(final_output)
 
