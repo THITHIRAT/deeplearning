@@ -10,15 +10,16 @@
 import os
 import tarfile
 import matplotlib.pyplot as plt
+%matplotlib inline
 import tensorflow as tf
 from six.moves import urllib
 from tensorflow.python.framework import ops
 ops.reset_default_graph()
 
 # Change Directory
-abspath = os.path.abspath(__file__)
-dname = os.path.dirname(abspath)
-os.chdir(dname)
+# abspath = os.path.abspath(_file_)
+# dname = os.path.dirname(abspath)
+# os.chdir(dname)
 
 # Start a graph session
 sess = tf.Session()
@@ -26,9 +27,9 @@ sess = tf.Session()
 # Set model parameters
 batch_size = 128
 data_dir = 'temp'
-output_every = 50 #2 # change this to 50 for a complete run
-generations = 10000 #100 # change this to 20000 for a complete run
-eval_every = 500 #2 # change this to 500 for a complete run
+output_every = 50 # change this to 50 for a complete run
+generations = 50000 # change this to 20000 for a complete run
+eval_every = 500 # change this to 500 for a complete run
 image_height = 32
 image_width = 32
 crop_height = 24
@@ -38,9 +39,9 @@ num_targets = 10
 extract_folder = 'cifar-10-batches-bin'
 
 # Exponential Learning Rate Decay Params
-learning_rate = 0.75 #0.1
-lr_decay = 0.1
-num_gens_to_wait = 250
+learning_rate = 0.5
+lr_decay = 0.9999
+num_gens_to_wait = 350.
 
 # Extract model parameters
 image_vec_length = image_height * image_width * num_channels
@@ -52,6 +53,22 @@ data_dir = 'temp'
 if not os.path.exists(data_dir):
     os.makedirs(data_dir)
 cifar10_url = 'http://www.cs.toronto.edu/~kriz/cifar-10-binary.tar.gz'
+
+#decay
+def variable_with_weight_decay(name, shape, stddev, wd):
+        dtype = tf.float32
+        var = variable_on_cpu( name, shape, tf.truncated_normal_initializer(stddev=stddev, dtype=tf.float32))
+        if wd is not None:
+            weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
+            tf.add_to_collection('losses', weight_decay)
+        return var
+      
+def variable_on_cpu(name, shape, initializer):
+        with tf.device('/cpu:0'):
+            dtype = tf.float32
+            var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
+        return var
+
 
 # Check if file exists, otherwise download it
 data_file = os.path.join(data_dir, 'cifar-10-binary.tar.gz')
@@ -141,10 +158,10 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
     
     # Max Pooling
     pool1 = tf.nn.max_pool(relu_conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],padding='SAME', name='pool_layer1')
-    
+
     # Local Response Normalization (parameters from paper)
     # paper: http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks
-    norm1 = tf.nn.lrn(pool1, depth_radius=5, bias=2.0, alpha=1e-3, beta=0.75, name='norm1')
+    norm1 = tf.nn.lrn(pool1, depth_radius=5, bias=2.0, alpha=0.001 / 9.0, beta=0.75, name='norm1')
 
     # Second Convolutional Layer
     with tf.variable_scope('conv2') as scope:
@@ -157,15 +174,63 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
         conv2_add_bias = tf.nn.bias_add(conv2, conv2_bias)
         # ReLU element wise
         relu_conv2 = tf.nn.relu(conv2_add_bias)
+
+    # Local Response Normalization (parameters from paper)
+    norm2 = tf.nn.lrn(relu_conv2, depth_radius=5, bias=2.0, alpha=0.001 / 9.0, beta=0.75, name='norm2')
     
     # Max Pooling
-    pool2 = tf.nn.max_pool(relu_conv2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool_layer2')    
+    pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool_layer2') 
     
-     # Local Response Normalization (parameters from paper)
-    norm2 = tf.nn.lrn(pool2, depth_radius=5, bias=2.0, alpha=1e-3, beta=0.75, name='norm2')
+    # Third Convolutional Layer
+    with tf.variable_scope('conv3') as scope:
+        # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
+        conv3_kernel = variable_with_weight_decay(name='conv_kernel3', shape=[3, 3, 64, 128], stddev=5e-2, wd=0.0)
+        # Convolve filter across prior output with stride size of 1
+        conv3 = tf.nn.conv2d(norm2, conv3_kernel, [1, 1, 1, 1], padding='SAME')
+        # Initialize and add the bias
+        conv3_bias = zero_var(name='conv_bias3', shape=[128], dtype=tf.float32)
+        conv3_add_bias = tf.nn.bias_add(conv3, conv3_bias)
+        # ReLU element wise
+        relu_conv3 = tf.nn.relu(conv3_add_bias)
+
+    # Local Response Normalization (parameters from paper)
+    #norm2 = tf.nn.lrn(relu_conv2, depth_radius=5, bias=2.0, alpha=0.001 / 9.0, beta=0.75, name='norm2')
     
+    # Max Pooling
+    #pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool_layer2')   
+    
+    # Fourth Convolutional Layer
+    with tf.variable_scope('conv4') as scope:
+        # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
+        conv4_kernel = variable_with_weight_decay(name='conv_kernel4', shape=[3, 3, 128, 128], stddev=5e-2, wd=0.0)
+        # Convolve filter across prior output with stride size of 1
+        conv4 = tf.nn.conv2d(relu_conv3, conv4_kernel, [1, 1, 1, 1], padding='SAME')
+        # Initialize and add the bias
+        conv4_bias = zero_var(name='conv_bias4', shape=[128], dtype=tf.float32)
+        conv4_add_bias = tf.nn.bias_add(conv4, conv4_bias)
+        # ReLU element wise
+        relu_conv4 = tf.nn.relu(conv4_add_bias)
+        
+    # Fifth Convolutional Layer
+    with tf.variable_scope('conv5') as scope:
+        # Conv kernel is 5x5, across all prior 64 features and we create 64 more features
+        conv5_kernel = variable_with_weight_decay(name='conv_kernel5', shape=[3, 3, 128, 128], stddev=5e-2, wd=0.0)
+        # Convolve filter across prior output with stride size of 1
+        conv5 = tf.nn.conv2d(relu_conv4, conv5_kernel, [1, 1, 1, 1], padding='SAME')
+        # Initialize and add the bias
+        conv5_bias = zero_var(name='conv_bias5', shape=[128], dtype=tf.float32)
+        conv5_add_bias = tf.nn.bias_add(conv5, conv5_bias)
+        # ReLU element wise
+        relu_conv5 = tf.nn.relu(conv5_add_bias)
+
+    # Local Response Normalization (parameters from paper)
+    norm5 = tf.nn.lrn(relu_conv5, depth_radius=5, bias=2.0, alpha=0.001 / 9.0, beta=0.75, name='norm5')
+    
+    # Max Pooling
+    pool5 = tf.nn.max_pool(norm5, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool_layer5')
+
     # Reshape output into a single matrix for multiplication for the fully connected layers
-    reshaped_output = tf.reshape(norm2, [batch_size, -1])
+    reshaped_output = tf.reshape(relu_conv5, [batch_size, -1])
     reshaped_dim = reshaped_output.get_shape()[1].value
     
     # First Fully Connected Layer
@@ -174,6 +239,9 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
         full_weight1 = truncated_normal_var(name='full_mult1', shape=[reshaped_dim, 384], dtype=tf.float32)
         full_bias1 = zero_var(name='full_bias1', shape=[384], dtype=tf.float32)
         full_layer1 = tf.nn.relu(tf.add(tf.matmul(reshaped_output, full_weight1), full_bias1))
+        
+    # # Dropout
+    #drop_1 = tf.layers.dropout(full_layer1,0.5, training=train_logical)
 
     # Second Fully Connected Layer
     with tf.variable_scope('full2') as scope:
@@ -181,6 +249,9 @@ def cifar_cnn_model(input_images, batch_size, train_logical=True):
         full_weight2 = truncated_normal_var(name='full_mult2', shape=[384, 192], dtype=tf.float32)
         full_bias2 = zero_var(name='full_bias2', shape=[192], dtype=tf.float32)
         full_layer2 = tf.nn.relu(tf.add(tf.matmul(full_layer1, full_weight2), full_bias2))
+    
+    # # Dropout
+    #drop_2 = tf.layers.dropout(full_layer2,0.5, training=train_logical)
 
     # Final Fully Connected Layer -> 10 categories for output (num_targets)
     with tf.variable_scope('full3') as scope:
